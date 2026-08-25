@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配色方案預覽 — Pick Your Comfort</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:ui-sans-system,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;background:#f5f3ef;color:#2d2a26;min-height:100vh;padding:32px 16px}
+h1{font-size:22px;text-align:center;margin-bottom:6px}
+.sub{font-size:13px;color:#8a8680;text-align:center;margin-bottom:28px;line-height:1.6}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:1100px;margin:0 auto}
+.card{border-radius:16px;padding:20px;position:relative;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;border:2px solid transparent}
+.card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,0.12)}
+.card.selected{border-color:var(--accent);box-shadow:0 12px 32px rgba(0,0,0,0.16)}
+.card h3{font-size:15px;margin-bottom:4px}
+.card .desc{font-size:11px;opacity:0.7;margin-bottom:14px;line-height:1.5}
+.mini-preview{border-radius:10px;padding:12px;margin-bottom:10px}
+.mini-preview .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.mini-preview input{border-radius:8px;padding:6px 10px;font-size:11px;width:100%;outline:none}
+.mini-preview .pills{display:flex;gap:6px}
+.mini-preview .pill{padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600}
+.mini-regex{border-radius:8px;padding:8px 10px;font-family:ui-monospace,monospace;font-size:10px;word-break:break-all}
+.tag{font-size:10px;padding:2px 6px;border-radius:99px;font-weight:700}
+.apply{width:100%;margin-top:12px;padding:8px;border-radius:99px;border:none;font-size:13px;font-weight:700;cursor:pointer;transition:opacity 0.2s}
+.apply:hover{opacity:0.85}
+.tip{text-align:center;margin-top:28px;font-size:12px;color:#8a8680}
+html{scrollbar-width:thin;scrollbar-color:#323647 transparent}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#323647;border-radius:99px;border:2px solid transparent;background-clip:content-box}::-webkit-scrollbar-thumb:hover{background:#4a5070}
+</style>
+</head>
+<body>
+<h1>🎨 挑一個舒服的配色</h1>
+<p class="sub">每個都是「柔和不刺眼」調校，點擊「套用」會直接寫入你的產生器<br>深色皆為莫蘭迪降對比，淺色皆為暖白/米白底</p>
+<div class="grid" id="grid"></div>
+<p class="tip">套用後會自動跳回 <code>index.html</code>，按右上角仍可切深/淺</p>
+<script>
+const palettes=[
+  {
+    id:'dusk',
+    name:'暮藍 · 柔和深色',
+    desc:'深藍灰底 + 莫蘭迪藍紫，夜間最舒服（目前預設深色）',
+    vars:{bg:'#1c1e2a',card:'#252836',border:'#323647',inputBg:'#1e2233',regexBg:'#1e2233',accent:'#7b8cff',accent2:'#9b7bff',text:'#e8e6e3',muted:'#9aa0b5',hintBg:'#2a2e40',hintText:'#cbd5e1',itemBg:'#1e2233',pillBg:'#2a2e40',pillText:'#9aa0b5',shadow:'0 8px 32px rgba(0,0,0,0.18)'},
+    dark:true
+  },
+  {
+    id:'mist',
+    name:'晨霧 · 米白淺色',
+    desc:'暖米白 + 柔藍紫，日間閱讀最舒服（目前預設淺色）',
+    vars:{bg:'#f5f3ef',card:'#ffffff',border:'#e8e0d6',inputBg:'#faf8f5',regexBg:'#faf8f5',accent:'#5b6ef5',accent2:'#7c5cff',text:'#2d2a26',muted:'#8a8680',hintBg:'#f0ebe3',hintText:'#57534e',itemBg:'#faf8f5',pillBg:'#f0ebe3',pillText:'#78716c',shadow:'0 8px 32px rgba(60,50,30,0.08)'},
+    dark:false
+  },
+  {
+    id:'sage',
+    name:'鼠尾草 · 溫柔綠意',
+    desc:'灰綠調 + 暖白，像日式無印感，最放鬆',
+    vars:{bg:'#f2f0eb',card:'#ffffff',border:'#e2ddd6',inputBg:'#f9f7f4',regexBg:'#f9f7f4',accent:'#7a9a7e',accent2:'#8ab4a0',text:'#2e332e',muted:'#8a9688',hintBg:'#eef2ec',hintText:'#4a5a4a',itemBg:'#f9f7f4',pillBg:'#e8ede8',pillText:'#6b7d6b',shadow:'0 8px 32px rgba(60,70,60,0.07)'},
+    dark:false
+  },
+  {
+    id:'latte',
+    name:'拿鐵 · 奶茶暖棕',
+    desc:'奶茶米白 + 焦糖棕，溫暖像咖啡廳',
+    vars:{bg:'#fdf6ee',card:'#ffffff',border:'#f0e0cc',inputBg:'#fffaf3',regexBg:'#fffaf3',accent:'#c4906a',accent2:'#d4a373',text:'#3d2e20',muted:'#a08c7a',hintBg:'#fdf0e0',hintText:'#6b5a44',itemBg:'#fffaf3',pillBg:'#f5e6d3',pillText:'#8a7060',shadow:'0 8px 32px rgba(80,50,20,0.07)'},
+    dark:false
+  },
+  {
+    id:'lavender',
+    name:'薰衣草 · 霧紫柔美',
+    desc:'薰衣草灰 + 霧紫，柔和帶一點優雅',
+    vars:{bg:'#f3f0f7',card:'#ffffff',border:'#e8e0f0',inputBg:'#faf8ff',regexBg:'#faf8ff',accent:'#9b8ec4',accent2:'#b0a0d8',text:'#2e2a3d',muted:'#8a819e',hintBg:'#f0ebf5',hintText:'#5a5070',itemBg:'#faf8ff',pillBg:'#ede8f5',pillText:'#7a6e9a',shadow:'0 8px 32px rgba(60,40,80,0.07)'},
+    dark:false
+  },
+  {
+    id:'mistBlue',
+    name:'霧藍 · 清新灰藍',
+    desc:'霧藍灰 + 灰藍，像陰天的海，最安靜',
+    vars:{bg:'#eef2f7',card:'#ffffff',border:'#dde3ed',inputBg:'#f7f9fc',regexBg:'#f7f9fc',accent:'#6b8db5',accent2:'#8aa8c8',text:'#243040',muted:'#7a8aa0',hintBg:'#eef2f7',hintText:'#4a5a6e',itemBg:'#f7f9fc',pillBg:'#e8edf3',pillText:'#6b7d94',shadow:'0 8px 32px rgba(40,60,90,0.07)'},
+    dark:false
+  },
+];
+
+const grid=document.getElementById('grid');
+palettes.forEach(p=>{
+  const v=p.vars;
+  const el=document.createElement('div');
+  el.className='card';
+  el.style.background=v.card;
+  el.style.borderColor='transparent';
+  el.style.color=v.text;
+  el.style.boxShadow=v.shadow;
+  el.innerHTML=`
+    <h3 style="color:${v.text}">${p.name}</h3>
+    <div class="desc" style="color:${v.muted}">${p.desc}</div>
+    <div class="mini-preview" style="background:${v.bg};border:1px solid ${v.border}">
+      <div class="row">
+        <input style="background:${v.inputBg};border:1px solid ${v.border};color:${v.text}" value="5" disabled>
+        <span class="pill" style="background:${v.accent};color:#fff">&lt;5 GB</span>
+        <span class="pill" style="background:${v.pillBg};color:${v.pillText};border:1px solid ${v.border}">&lt;10 GB</span>
+      </div>
+      <div class="mini-regex" style="background:${v.regexBg};border:1px solid ${v.border};color:${v.text}">\\[(?:[6-9]|5|\\d{2,})...GB\\]</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <span class="tag" style="background:${v.accent};color:#fff">下載</span>
+        <span class="tag" style="background:#ef4444;color:#fff">排除</span>
+        <span style="font-size:10px;color:${v.muted};margin-left:auto">Aa Bb Cc</span>
+      </div>
+    </div>
+    <button class="apply" style="background:${v.accent};color:#fff">套用此配色</button>
+  `;
+  el.querySelector('.apply').onclick=()=>{
+    // 儲存選擇並跳回 index
+    localStorage.setItem('qb-rss-palette', p.id);
+    // 同時把 vars 寫入 index 的 localStorage 供讀取
+    localStorage.setItem('qb-rss-palette-vars', JSON.stringify(v));
+    localStorage.setItem('qb-rss-palette-isDark', p.dark ? '1':'0');
+    // 也直接嘗試用 postMessage 通知已開啟的 index
+    location.href='index.html?palette='+p.id;
+  };
+  el.onclick=(e)=>{
+    if(e.target.tagName==='BUTTON') return;
+    document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+  grid.appendChild(el);
+});
+
+// 標記當前已選
+const cur=localStorage.getItem('qb-rss-palette');
+if(cur){
+  [...grid.children].forEach((c,i)=>{
+    if(palettes[i].id===cur) c.classList.add('selected');
+  });
+}
+</script>
+</body>
+</html>
