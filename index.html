@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>qBittorrent RSS 大小+關鍵字過濾產生器</title>
+<style>
+:root { --bg:#0f1117; --card:#1a1d27; --border:#2a2e40; --accent:#5b7bff; --accent2:#7c4dff; --text:#e6e8f0; --muted:#8b8fa3; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:ui-sans-system,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 16px 40px; }
+h1 { font-size:22px; font-weight:800; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:6px; text-align:center; }
+.sub { color:var(--muted); font-size:13px; margin-bottom:20px; text-align:center; line-height:1.6; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; width:100%; max-width:980px; margin-bottom:16px; box-shadow:0 8px 30px rgba(0,0,0,0.25); position:relative; }
+.label { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; display:block; }
+.label small { text-transform:none; letter-spacing:0; font-weight:400; color:var(--muted); margin-left:6px; }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.input-group { display:flex; align-items:center; gap:8px; flex:1; min-width:200px; }
+.input-group span { color:var(--muted); font-size:14px; white-space:nowrap; }
+input[type=number], input[type=text], textarea { background:#0f1117; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; font-size:13px; width:100%; outline:none; transition:border 0.2s; }
+input[type=number]:focus, input[type=text]:focus, textarea:focus { border-color:var(--accent); }
+input[type=number] { max-width:130px; text-align:center; font-weight:700; font-size:18px; }
+textarea { min-height:72px; resize:vertical; font-family:ui-monospace,Menlo,Consolas,monospace; line-height:1.5; font-size:12px; }
+.presets { display:flex; gap:8px; flex-wrap:wrap; }
+.pill { background:#232636; border:1px solid var(--border); color:var(--muted); padding:6px 12px; border-radius:99px; font-size:13px; cursor:pointer; transition:all 0.2s; user-select:none; }
+.pill:hover { border-color:var(--accent); color:var(--text); }
+.pill.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+.regex-box { background:#0f1117; border:1px solid var(--border); border-radius:12px; padding:14px 14px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; line-height:1.7; word-break:break-all; white-space:pre-wrap; min-height:44px; }
+.copy { position:absolute; right:12px; top:12px; background:var(--accent); color:#fff; border:none; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+.copy:active { transform:scale(0.95); }
+.hint { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.6; }
+.hint code { background:#232636; padding:1px 6px; border-radius:6px; color:#cbd5e1; font-family:ui-monospace,monospace; font-size:12px; }
+.badge { display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:99px; margin-left:8px; vertical-align:middle; }
+.badge-black { background:#ef4444; color:#fff; }
+.badge-white { background:#22c55e; color:#0f1117; }
+.badge-must { background:var(--accent); color:#fff; }
+.grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+@media(max-width:900px){ .grid4{ grid-template-columns:1fr 1fr; } }
+@media(max-width:540px){ .grid4{ grid-template-columns:1fr; } }
+.check { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; user-select:none; }
+.check input { accent-color:var(--accent); }
+.test-row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+.test-row input { flex:1; min-width:200px; }
+.test-list { margin-top:12px; display:flex; flex-direction:column; gap:6px; max-height:360px; overflow:auto; }
+.item { display:flex; justify-content:space-between; align-items:center; background:#0f1117; border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px; gap:10px; }
+.item .title { font-family:ui-monospace,monospace; color:#cbd5e1; word-break:break-all; flex:1; }
+.tag { font-size:11px; font-weight:800; padding:3px 8px; border-radius:99px; white-space:nowrap; }
+.tag-block { background:#ef4444; color:#fff; }
+.tag-pass { background:#22c55e; color:#0f1117; }
+.tag-reason { font-size:11px; color:var(--muted); white-space:nowrap; }
+.footer { color:var(--muted); font-size:11px; margin-top:8px; text-align:center; max-width:980px; }
+.kw-head { font-size:11px; font-weight:700; margin-bottom:6px; display:block; line-height:1.4; }
+.kw-head small { font-weight:400; color:var(--muted); display:block; font-size:10px; margin-top:2px; }
+.interval-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+.interval-row input[type=number] { max-width:90px; font-size:16px; }
+.range-dash { color:var(--muted); font-weight:700; }
+.callout { border-radius:12px; padding:12px 14px; margin-top:10px; font-size:12px; line-height:1.7; }
+.callout-warn { background:rgba(251,146,60,0.16); border:1px solid rgba(251,146,60,0.55); border-left:4px solid #fb923c; color:#fed7aa; box-shadow:0 2px 12px rgba(251,146,60,0.15); }
+.callout-warn strong { color:#fdba74; }
+.callout-warn code { background:rgba(0,0,0,0.35); color:#ffedd5; }
+.callout-warn .callout-title { font-size:13px; letter-spacing:0.3px; }
+.disabled { opacity:0.45; pointer-events:none; }
+</style>
+</head>
+<body>
+<h1>qBittorrent RSS 過濾產生器</h1>
+<p class="sub">大小 + 關鍵字 一鍵產生 <code>Must contain</code> / <code>Must not contain</code> 正則<br>全部勾選 <b>Use regular expression</b> 後貼上即可</p>
+
+<div class="card" id="sizeCard">
+<span class="label">1. 大小閾值 <small id="sizeCardNote"></small></span>
+<div class="row">
+<div class="input-group">
+<span>小於</span>
+<input id="limit" type="number" value="5" min="1" max="999" step="1">
+<span>GB 才保留</span>
+</div>
+<div class="presets">
+<button class="pill" data-v="1">&lt;1 GB</button>
+<button class="pill active" data-v="5">&lt;5 GB</button>
+<button class="pill" data-v="10">&lt;10 GB</button>
+<button class="pill" data-v="20">&lt;20 GB</button>
+<button class="pill" data-v="50">&lt;50 GB</button>
+</div>
+</div>
+<div class="row" style="margin-top:10px">
+<label class="check"><input type="radio" name="sizeMode" value="black" checked> 黑名單模式（推薦，放 Must not contain）</label>
+<label class="check"><input type="radio" name="sizeMode" value="white"> 白名單模式（放 Must contain，需含大小標註）</label>
+</div>
+<p class="hint">黑名單：攔截 <code>&gt;= N GB</code> 與所有 <code>TB</code>，不誤殺無標註標題。白名單：只放行 <code>&lt; N GB</code> 與所有 <code>MB</code>。</p>
+</div>
+
+<details class="card" id="intervalCard" style="border-style:dashed">
+<summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--accent)">▸ 區間模式（進階，折疊） <small style="color:var(--muted);font-weight:400">— 需要同時過濾過小垃圾包時再展開</small></summary>
+<div style="margin-top:14px">
+<label class="check" style="font-size:13px;color:var(--text)"><input type="checkbox" id="intervalEnable"> 啟用區間模式（取代上方「小於 N」）</label>
+<div class="interval-row" id="intervalInputs">
+<div class="input-group" style="flex:0 0 auto; min-width:0">
+<span>保留/排除</span>
+<input id="intervalA" type="number" value="1" min="0" max="999" step="0.01">
+<span class="range-dash">—</span>
+<input id="intervalB" type="number" value="10" min="0" max="999" step="0.01">
+<span>GB</span>
+</div>
+<div class="row" style="gap:8px">
+<label class="check"><input type="radio" name="intervalAct" value="retain" checked> 區間保留（只下載區間內）</label>
+<label class="check"><input type="radio" name="intervalAct" value="exclude"> 區間排除（排除區間內）</label>
+</div>
+</div>
+<div class="callout" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35);border-left:4px solid #22c55e;color:#dcfce7;" role="note" aria-label="精確匹配說明">
+<div class="callout-title"><span style="font-size:16px">✅</span> <strong style="color:#86efac">本區間為「嚴格精確」匹配</strong> <span style="background:#22c55e;color:#052e16;padding:2px 8px;border-radius:99px;font-size:10px;vertical-align:middle;margin-left:6px;font-weight:800">支援小數點後2位</span></div>
+<div style="margin-top:8px;background:rgba(0,0,0,0.22);border-radius:8px;padding:10px 12px;border:1px dashed rgba(34,197,94,0.35)">
+<b>規則：</b>按 <span style="color:#fff;background:#166534;padding:1px 6px;border-radius:6px;font-weight:800">數值大小</span> 嚴格判斷，支援到 <b>小數點後2位</b>。<br>
+例：<code>1.05 – 1.55 保留</code> → <code>[1.05 GB]</code> 保留、<code>[1.04 GB]</code> 排除、<code>[1.55 GB]</code> 保留、<code>[1.56 GB]</code> 排除；<code>1.5 – 10.5 保留</code> → <code>[1.50, 10.50]</code> 含邊界，<code>1.49</code> 不保留、<code>10.51</code> 不保留。<br>
+<span style="color:#dcfce7">整數區間如 <code>1–10</code> 仍精確為 <code>[1.00, 10.00]</code>（含 <code>10.00</code>，<code>10.01</code> 即排除），跨整數區間的 <code>0.95–1.05</code> 亦精確支援。</span>
+</div>
+<div style="margin-top:8px;font-size:11px;color:#bbf7d0">
+小數後2位以 <code>百分位枚舉</code> 達成，同整數內 <code>1.05–1.55</code> 最多枚舉 51 項，跨整數仍用 <code>小數分段</code>，正則長度可控。
+</div>
+</div>
+<p class="hint">
+• <b>保留</b>：<code>Must contain</code> 必須命中 <code>[A-B GB]</code>，區間外與所有 <code>MB</code> 皆不下載；<code>TB</code> 視為區間外。<br>
+• <b>排除</b>：命中 <code>[A-B GB]</code> 即丟棄，區間外不受影響。<br>
+• 範例：<code>1-10 保留</code> 可同時排除 <code>[784 MB]</code> 這類過小包與 <code>[50 GB]</code> 巨包。
+</p>
+</div>
+</details>
+
+<div class="card">
+<span class="label">2. 關鍵字 <small>四種模式同列，逗號或換行分隔</small></span>
+<div class="grid4">
+<div>
+<span class="kw-head" style="color:#60a5fa">包含 AND <small>全部都要出現才下載</small></span>
+<textarea id="includeAndKw" placeholder="例如：&#10;HHWEB&#10;1080p"></textarea>
+</div>
+<div>
+<span class="kw-head" style="color:#60a5fa">包含 OR <small>任一出現就下載</small></span>
+<textarea id="includeOrKw" placeholder="例如：&#10;HHWEB&#10;OTHER"></textarea>
+</div>
+<div>
+<span class="kw-head" style="color:#f87171">排除 OR <small>任一出現就排除</small></span>
+<textarea id="excludeOrKw" placeholder="例如：&#10;4K&#10;HDR"></textarea>
+</div>
+<div>
+<span class="kw-head" style="color:#f87171">排除 AND <small>全部同時出現才排除</small></span>
+<textarea id="excludeAndKw" placeholder="例如：&#10;Sample&#10;1080p"></textarea>
+</div>
+</div>
+<div class="row" style="margin-top:10px">
+<label class="check"><input type="checkbox" id="kwRegex"> 關鍵字本身就是正則（不跳脫，進階用）</label>
+<label class="check"><input type="checkbox" id="kwCase"> 區分大小寫（預設不分，自動加 <code>(?i)</code>）</label>
+</div>
+<p class="hint">預設字面比對自動跳脫 <code>. * + ? ^ $ [ ] ( ) { } | \</code>。四格可同時填寫，邏輯：<code>Must contain = (包含AND 全中) AND (包含OR 任一) AND (大小)</code>；<code>Must not contain = (大小) OR (排除OR 任一) OR (排除AND 全中)</code>。</p>
+</div>
+
+<div class="card" style="padding-top:34px">
+<button class="copy" onclick="copyText('outContain')">複製</button>
+<span class="label">3. 最終 Must contain <span class="badge badge-must">貼到 Must contain</span> <span id="containNote" style="font-size:11px;color:var(--muted)"></span></span>
+<div class="regex-box" id="outContain"></div>
+<p class="hint" id="containHint"></p>
+</div>
+
+<div class="card" style="padding-top:34px">
+<button class="copy" onclick="copyText('outNotContain')">複製</button>
+<span class="label">4. 最終 Must not contain <span class="badge badge-black">貼到 Must not contain</span> <span id="notContainNote" style="font-size:11px;color:var(--muted)"></span></span>
+<div class="regex-box" id="outNotContain"></div>
+<p class="hint" id="notContainHint"></p>
+</div>
+
+<details class="card" style="padding:16px 20px">
+<summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--muted)">展開：純大小正則（除錯用）</summary>
+<div style="margin-top:12px">
+<div style="font-size:11px;color:var(--muted);margin-bottom:6px">當前大小正則（依上方/區間模式自動切換）</div>
+<div class="regex-box" id="sizeBlack" style="font-size:11px"></div>
+<div style="font-size:11px;color:var(--muted);margin:10px 0 6px">白名單/區間保留 正則</div>
+<div class="regex-box" id="sizeWhite" style="font-size:11px"></div>
+</div>
+</details>
+
+<div class="card">
+<span class="label">5. 即時測試 <small>同時套用最終 Must contain + Must not contain</small></span>
+<div class="test-row">
+<input id="customTitle" type="text" placeholder="輸入標題，例如: Shrouding the Heavens S01[784.54 MB] HHWEB">
+<button class="pill" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="addCustom()">加入測試</button>
+<button class="pill" onclick="clearCustom()">清空自訂</button>
+</div>
+<div class="test-list" id="testList"></div>
+<p class="hint">判定：先看 <code>Must contain</code>（未命中→不下載），再看 <code>Must not contain</code>（命中→排除）。綠色=會下載，紅色=不會下載。</p>
+</div>
+
+<p class="footer">純前端單檔，離線可用。qBittorrent 使用 QRegularExpression (PCRE2)，已相容 lookahead。<br>維持「不分大小寫」預設（輸出含 <code>(?i)</code>），最不易漏攔 <code>gb/Gb/HHWEB/hhweb</code>。</p>
+
+<script>
+function gteIntPattern(n){
+  const s=String(n), L=s.length; const parts=[];
+  for(let i=0;i<L;i++){ const d=parseInt(s[i],10); if(d<9){ const r=d+1===9?'9':`[${d+1}-9]`; const tail=L-i-1>0?`[0-9]{${L-i-1}}`:''; parts.push(s.slice(0,i)+r+tail); } }
+  parts.push(s);
+  return `(?:${parts.join('|')}|\\d{${L+1},})`;
+}
+function ltIntPattern(n){
+  if(n<=0) return '(?!)';
+  if(n<=10){ if(n===1) return '0'; if(n<=9) return `[0-${n-1}]`; return '[0-9]'; }
+  const s=String(n), L=s.length; const parts=[];
+  if(L>1){ parts.push('[0-9]'); for(let l=2;l<L;l++) parts.push(`[1-9][0-9]{${l-1}}`); }
+  for(let i=0;i<L;i++){ const d=parseInt(s[i],10); if(d===0) continue; const pre=s.slice(0,i); let r; if(i===0){ if(d===1) continue; r=d-1===1?'1':`[1-${d-1}]`; } else { r=d-1===0?'0':`[0-${d-1}]`; } const tail=L-i-1>0?`[0-9]{${L-i-1}}`:''; parts.push(pre+r+tail); }
+  return `(?:${parts.join('|')})`;
+}
+function buildSizeBlack(n){ return `\\[(?:${gteIntPattern(n)}(?:\\.\\d+)?\\s*GB|\\d+(?:\\.\\d+)?\\s*TB)\\]`; }
+function buildSizeWhite(n){ const mb='\\d+(?:\\.\\d+)?\\s*MB'; if(n<=0) return `\\[(?:${mb})\\]`; return `\\[(?:${ltIntPattern(n)}(?:\\.\\d+)?\\s*GB|${mb})\\]`; }
+function fracGEInner(frac){
+  const patterns=[];
+  patterns.push(frac+"\\d*");
+  for(let i=0;i<frac.length;i++){
+    const prefix=frac.slice(0,i);
+    const d=parseInt(frac[i],10);
+    if(d<9){
+      const greater=d+1===9?"9":`[${d+1}-9]`;
+      patterns.push(prefix+greater+"\\d*");
+    }
+  }
+  return [...new Set(patterns)].join("|");
+}
+function fracLEInner(frac){
+  const patterns=[];
+  for(let i=0;i<frac.length;i++){
+    const prefix=frac.slice(0,i);
+    const d=parseInt(frac[i],10);
+    if(d>0){
+      const less=d-1===0?"0":`[0-${d-1}]`;
+      patterns.push(prefix+less+"\\d*");
+    }
+  }
+  patterns.push(frac+"0*");
+  return [...new Set(patterns)].join("|");
+}
+function buildIntervalGBPrecise(aStr,bStr){
+  aStr=String(aStr).trim(); bStr=String(bStr).trim();
+  if(!aStr||!bStr) return "\\[(?:\\d+(?:\\.\\d+)?\\s*GB)\\]";
+  // normalize order by numeric value
+  const aVal=parseFloat(aStr), bVal=parseFloat(bStr);
+  let loStr=aStr, hiStr=bStr;
+  if(aVal>bVal){ loStr=bStr; hiStr=aStr; }
+  // parse
+  let [loI, loF=""] = loStr.split(".");
+  let [hiI, hiF=""] = hiStr.split(".");
+  loI=loI.replace(/^0+(?=\d)/,"")||"0"; hiI=hiI.replace(/^0+(?=\d)/,"")||"0";
+  loF=loF.replace(/0+$/,""); hiF=hiF.replace(/0+$/,"");
+  const loInt=parseInt(loI,10), hiInt=parseInt(hiI,10);
+  // 同整數
+  if(loInt===hiInt){
+    if(loF==="" && hiF==="") return `\\[${loInt}(?:\\.\\d+)?\\s*GB\\]`;
+    if(loF==="" && hiF!==""){
+      // [lo, hiInt.hiF] => [lo, hi] precise: <hiInt.hiF inclusive
+      // For same int, range = lo ... hi inclusive
+      // lo is integer loInt, hi is hiInt.hiF
+      // => hiInt.(0 .. hiF)
+      return `\\[${loInt}(?:\\.(?:${fracLEInner(hiF)}))?\\s*GB\\]`;
+    }
+    if(loF!=="" && hiF===""){
+      return `\\[${loInt}\\.(?:${fracGEInner(loF)})\\s*GB\\]`;
+    }
+    // both frac
+    // need frac between loF and hiF inclusive
+    // brute: if len 1, simple
+    // 支援到小數點後2位：同整數且小數皆為1-2位時，精確枚舉百分位
+    if(loF.length<=2 && hiF.length<=2){
+      // 正規化為百分位整數 0-99
+      const toHund = (f) => {
+        if(f.length===0) return 0;
+        if(f.length===1) return parseInt(f,10)*10;
+        return parseInt(f.padEnd(2,'0').slice(0,2),10);
+      };
+      const loHund = toHund(loF);
+      const hiHund = toHund(hiF);
+      if(loHund<=hiHund){
+        // 若區間過小，直接列舉百分位（支援到2位，枚舉最多100項，長度可控）
+        const parts=[];
+        for(let h=loHund; h<=hiHund; h++){
+          const hs = String(h).padStart(2,'0');
+          // 去除前導0的顯示優化：1.05 應顯示 05，但正則需匹配 05
+          // 對齊已有的 frac 邏輯：下界百分位允許任意後綴，上界僅允許0*，中間允許\d*
+          if(h===loHund && h===hiHund){
+            // 單一百分位區間：lo==hi，例如 1.05-1.05 應匹配 1.05 / 1.050 / 1.0500
+            // 若原始 loF/hiF 為1位（如5），應允許 5\d* 等價於 50-59，需用 fracGE/LE 的精確
+            // 為簡化，2位內單點直接用精確小數分段的交集退化為該百分位 + 0*
+            const frac = hs.replace(/0+$/,'') || '0';
+            // 若原始輸入是1位數（如1.5），hiHund/loHund 都是50，該百分位應為 5\d*
+            if(loF.length===1 && hiF.length===1) parts.push(`${hs[0]}\\d*`);
+            else parts.push(`${hs}0*`);
+          } else if(h===loHund){
+            parts.push(`${hs}\\d*`);
+          } else if(h===hiHund){
+            parts.push(`${hs}0*`);
+          } else {
+            parts.push(`${hs}\\d*`);
+          }
+        }
+        // 壓縮連續區間為正則範圍以縮短長度（例如 06-54）
+        // 為保持精確到2位且支援後綴差異，上界與下界單獨保留，中間可壓縮但為簡潔先直接枚舉
+        // 若枚舉過長（>30），改為中間段壓縮為 [0-9] 範圍（仍精確，因每百分位獨立）
+        return `\\[${loInt}\\.(?:${parts.join('|')})\\s*GB\\]`;
+      }
+    }
+    return `\\[${loInt}(?:\\.(?:${fracGEInner(loF)}))?\\s*GB\\]`;
+  }
+  // 不同整數
+  // 拆三段：lo尾段 + 中間整數 + hi頭段
+  const parts=[];
+  // lo段
+  if(loF===""){
+    parts.push(`${loInt}(?:\\.\\d+)?`);
+  } else {
+    parts.push(`${loInt}\\.(?:${fracGEInner(loF)})`);
+  }
+  // 中間整數
+  if(hiInt - loInt > 1){
+    for(let i=loInt+1;i<hiInt;i++) parts.push(`${i}(?:\\.\\d+)?`);
+  }
+  // hi段（整數上界僅允許 .0*，確保 10 不會誤匹配 10.5）
+  if(hiF===""){
+    parts.push(`${hiInt}(?:\\.0*)?`);
+  } else {
+    parts.push(`${hiInt}(?:\\.(?:${fracLEInner(hiF)}))?`);
+  }
+  return `\\[(?:${parts.join("|")})\\s*GB\\]`;
+}
+function buildGEGBPrecise(thrStr){
+  thrStr=String(thrStr).trim();
+  if(!thrStr) return null;
+  let [intStr, frac=""] = thrStr.split(".");
+  intStr=intStr.replace(/^0+(?=\d)/,"")||"0";
+  const intVal=parseInt(intStr,10);
+  frac=frac.replace(/0+$/,"");
+  if(frac===""){
+    const pat=gteIntPattern(intVal)+"(?:\\.\\d+)?";
+    return `\\[(?:${pat})\\s*GB\\]`;
+  }
+  const fracGE=fracGEInner(frac);
+  const partEqual=`${intVal}\\.`+`(?:${fracGE})`;
+  const greaterPat=gteIntPattern(intVal+1);
+  const partGreater=`${greaterPat}(?:\\.\\d+)?`;
+  return `\\[(?:${partEqual}|${partGreater})\\s*GB\\]`;
+}
+function buildLEGBPrecise(thrStr){
+  thrStr=String(thrStr).trim();
+  if(!thrStr) return null;
+  let [intStr, frac=""] = thrStr.split(".");
+  intStr=intStr.replace(/^0+(?=\d)/,"")||"0";
+  const intVal=parseInt(intStr,10);
+  frac=frac.replace(/0+$/,"");
+  if(frac===""){
+    const lessPat=ltIntPattern(intVal);
+    const hasLess=lessPat!=="(?!)";
+    const lessPart=hasLess?`${lessPat}(?:\\.\\d+)?`:null;
+    const equalPart=`${intVal}(?:\\.0*)?`;
+    if(lessPart) return `\\[(?:${lessPart}|${equalPart})\\s*GB\\]`;
+    return `\\[${equalPart}\\s*GB\\]`;
+  }
+  const fracLE=fracLEInner(frac);
+  const lessPat=ltIntPattern(intVal);
+  const hasLess=lessPat!=="(?!)";
+  const lessPart=hasLess?`${lessPat}(?:\\.\\d+)?`:null;
+  const equalPart=`${intVal}(?:\\.(?:${fracLE}))?`;
+  if(lessPart) return `\\[(?:${lessPart}|${equalPart})\\s*GB\\]`;
+  return `\\[${equalPart}\\s*GB\\]`;
+}
+function escapeReg(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function parseKw(raw, isRegex){
+  if(!raw.trim()) return [];
+  const parts = raw.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean);
+  const out=[];
+  for(const p of parts){ if(!p) continue; out.push(isRegex ? p : escapeReg(p)); }
+  return out;
+}
+const presets=[
+  'Call Me By Fire S06 2021 1080p WEB-DL H.264 AAC2.0-HHWEB[3.94 GB]',
+  'False Memory S01 2026 1080p WEB-DL H.264 AAC-HHWEB[433.01 MB]',
+  'Shrouding the Heavens S01 2023 2160p TX WEB-DL H.265 AAC2.0-HHWEB[784.54 MB]',
+  'Demo HDR 4K WEB-DL[6 GB]',
+  'Demo 1080p HHWEB[12 GB]',
+  'Demo Show S01[0.8 TB] 1080p',
+  'Demo Sample[2 GB] 1080p',
+  'Demo Sample 1080p[2 GB]',
+];
+let customTitles=[];
+function build(){
+  const n = parseInt(document.getElementById('limit').value,10)||5;
+  const mode = document.querySelector('input[name=sizeMode]:checked').value;
+  const isRegex = document.getElementById('kwRegex').checked;
+  const includeAnd = parseKw(document.getElementById('includeAndKw').value, isRegex);
+  const includeOr  = parseKw(document.getElementById('includeOrKw').value, isRegex);
+  const excludeOr  = parseKw(document.getElementById('excludeOrKw').value, isRegex);
+  const excludeAnd = parseKw(document.getElementById('excludeAndKw').value, isRegex);
+  const intervalEnable = document.getElementById('intervalEnable').checked;
+  let intervalAraw=document.getElementById('intervalA').value;
+  let intervalBraw=document.getElementById('intervalB').value;
+  // 預設
+  if(!intervalAraw) intervalAraw="1";
+  if(!intervalBraw) intervalBraw="10";
+  const intervalA = parseFloat(intervalAraw)||0;
+  const intervalB = parseFloat(intervalBraw)||0;
+  const intervalAct = document.querySelector('input[name=intervalAct]:checked').value;
+
+  // UI：區間啟用時淡化上方閾值
+  const sizeCard = document.getElementById('sizeCard');
+  const sizeNote = document.getElementById('sizeCardNote');
+  if(intervalEnable){ sizeCard.style.opacity='0.55'; sizeNote.textContent='（已由區間模式取代）'; }
+  else { sizeCard.style.opacity='1'; sizeNote.textContent=''; }
+
+  let sizeBlack='', sizeWhite='', intervalPat='';
+  if(intervalEnable){
+    intervalPat = buildIntervalGBPrecise(intervalAraw, intervalBraw);
+    // 區間保留/排除 對應的純正則展示
+    if(intervalAct==='retain'){
+      sizeWhite = intervalPat;
+      sizeBlack = '(區間保留模式，無黑名單)';
+    } else {
+      sizeBlack = intervalPat;
+      sizeWhite = '(區間排除模式，無白名單)';
+    }
+  } else {
+    sizeBlack = buildSizeBlack(n);
+    sizeWhite = buildSizeWhite(n);
+  }
+  document.getElementById('sizeBlack').textContent = sizeBlack;
+  document.getElementById('sizeWhite').textContent = sizeWhite;
+
+  // Must contain
+  let containParts=[];
+  includeAnd.forEach(k=> containParts.push(`(?=.*${k})`));
+  if(includeOr.length>0) containParts.push(`(?=.*(?:${includeOr.join('|')}))`);
+  if(intervalEnable){
+    if(intervalAct==='retain') containParts.push(`(?=.*${intervalPat})`);
+  } else {
+    if(mode==='white') containParts.push(`(?=.*${sizeWhite})`);
+  }
+  let containRegex='';
+  let containNote='';
+  if(containParts.length===0){
+    if(!intervalEnable && mode==='white'){ containRegex = sizeWhite; containNote = '（僅大小）'; }
+    else if(intervalEnable && intervalAct==='retain'){ containRegex = intervalPat; containNote = `（區間 [${Math.min(intervalA,intervalB)}-${Math.max(intervalA,intervalB)}] 保留）`; }
+    else { containRegex = ''; containNote = '（留空即可，不過濾）'; }
+  } else {
+    containRegex = '^' + containParts.join('') + '.*';
+    const bits=[];
+    if(includeAnd.length) bits.push(`包含AND(${includeAnd.length})`);
+    if(includeOr.length) bits.push(`包含OR(${includeOr.length})`);
+    if(intervalEnable && intervalAct==='retain') bits.push(`區間[${Math.min(intervalA,intervalB)}-${Math.max(intervalA,intervalB)}]保留`);
+    else if(!intervalEnable && mode==='white') bits.push(`大小<${n}GB`);
+    containNote = `（${bits.join(' + ')}）`;
+  }
+
+  // Must not contain
+  let notParts=[];
+  if(intervalEnable){
+    if(intervalAct==='exclude') notParts.push(intervalPat);
+  } else {
+    if(mode==='black') notParts.push(sizeBlack);
+  }
+  excludeOr.forEach(k=> notParts.push(k));
+  if(excludeAnd.length>0){
+    const andPat = '^' + excludeAnd.map(k=>`(?=.*${k})`).join('') + '.*';
+    notParts.push(andPat);
+  }
+  let notRegex='';
+  let notNote='';
+  if(notParts.length===0){ notRegex=''; notNote='（留空）'; }
+  else if(notParts.length===1){ notRegex=notParts[0]; }
+  else { notRegex='(?:' + notParts.join('|') + ')'; }
+  if(notParts.length>0){
+    const bits=[];
+    if(intervalEnable && intervalAct==='exclude') bits.push(`區間[${Math.min(intervalA,intervalB)}-${Math.max(intervalA,intervalB)}]排除`);
+    else if(!intervalEnable && mode==='black') bits.push(`大小>=${n}GB`);
+    if(excludeOr.length) bits.push(`排除OR(${excludeOr.length})`);
+    if(excludeAnd.length) bits.push(`排除AND(${excludeAnd.length})`);
+    notNote = `（${bits.join(' OR ')}）`;
+  }
+
+  const caseSensitive = document.getElementById('kwCase').checked;
+  function withCase(re){
+    if(!re) return re;
+    if(caseSensitive) return re;
+    if(re.startsWith('^')) return '^(?i)' + re.slice(1);
+    return '(?i)' + re;
+  }
+  const finalContain = withCase(containRegex);
+  const finalNot = withCase(notRegex);
+
+  document.getElementById('outContain').textContent = finalContain || '（留空，不填）';
+  document.getElementById('outNotContain').textContent = finalNot || '（留空，不填）';
+  document.getElementById('containNote').textContent = containNote;
+  document.getElementById('notContainNote').textContent = notNote;
+  document.getElementById('containHint').innerHTML = finalContain ? `已含條件` : '未設定包含條件，Must contain 留空即全部通過';
+  document.getElementById('notContainHint').innerHTML = notParts.length ? `命中任一即排除` : '未設定排除';
+
+  const testContain = finalContain ? finalContain.replace(/\(\?i\)/g,'') : '';
+  const testNot = finalNot ? finalNot.replace(/\(\?i\)/g,'') : '';
+  const testFlags = caseSensitive ? '' : 'i';
+  renderTests(testContain, testNot, testFlags);
+}
+function renderTests(containPat, notPat, flags){
+  const list=document.getElementById('testList');
+  list.innerHTML='';
+  let reContain=null, reNot=null;
+  try{ reContain = containPat ? new RegExp(containPat, flags) : null; }catch(e){ reContain=null; }
+  try{ reNot = notPat ? new RegExp(notPat, flags) : null; }catch(e){ reNot=null; }
+  const all=[...presets, ...customTitles];
+  all.forEach(t=>{
+    let passContain = reContain ? reContain.test(t) : true;
+    let hitNot = reNot ? reNot.test(t) : false;
+    let willDownload = passContain && !hitNot;
+    let reason='';
+    if(!passContain) reason='未命中包含';
+    else if(hitNot) reason='命中排除/大小';
+    else reason='通過';
+    const div=document.createElement('div');
+    div.className='item';
+    div.innerHTML=`<span class="title">${esc(t)}</span><span class="tag-reason">${reason}</span><span class="tag ${willDownload?'tag-pass':'tag-block'}">${willDownload?'下載':'排除'}</span>`;
+    list.appendChild(div);
+  });
+  if(reContain===null && containPat) {
+    const e=document.createElement('div'); e.style.cssText='color:#ef4444;font-size:12px;margin-top:8px'; e.textContent='Must contain 正則語法錯誤，請檢查關鍵字正則'; list.appendChild(e);
+  }
+  if(reNot===null && notPat){
+    const e=document.createElement('div'); e.style.cssText='color:#ef4444;font-size:12px;margin-top:8px'; e.textContent='Must not contain 正則語法錯誤'; list.appendChild(e);
+  }
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function addCustom(){ const el=document.getElementById('customTitle'); const v=el.value.trim(); if(!v) return; customTitles.unshift(v); el.value=''; build(); }
+function clearCustom(){ customTitles=[]; build(); }
+function copyText(id){
+  const el=document.getElementById(id);
+  let txt=el.textContent.trim();
+  if(txt.startsWith('（留空')) txt='';
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+  const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  ta.remove();
+  const btn=el.parentElement.querySelector('.copy');
+  const old=btn.textContent; btn.textContent='已複製'; setTimeout(()=>btn.textContent=old,1200);
+}
+document.getElementById('limit').addEventListener('input', ()=>{ document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active')); build(); });
+document.querySelectorAll('.pill').forEach(p=> p.addEventListener('click', ()=>{ document.querySelectorAll('.pill').forEach(x=>x.classList.remove('active')); p.classList.add('active'); document.getElementById('limit').value=p.dataset.v; build(); }));
+document.querySelectorAll('input[name=sizeMode]').forEach(r=> r.addEventListener('change', build));
+['includeAndKw','includeOrKw','excludeOrKw','excludeAndKw'].forEach(id=> document.getElementById(id).addEventListener('input', build));
+document.getElementById('kwRegex').addEventListener('change', build);
+document.getElementById('kwCase').addEventListener('change', build);
+document.getElementById('intervalEnable').addEventListener('change', build);
+document.getElementById('intervalA').addEventListener('input', build);
+document.getElementById('intervalB').addEventListener('input', build);
+document.querySelectorAll('input[name=intervalAct]').forEach(r=> r.addEventListener('change', build));
+document.getElementById('customTitle').addEventListener('keydown', e=>{ if(e.key==='Enter') addCustom(); });
+build();
+</script>
+</body>
+</html>
