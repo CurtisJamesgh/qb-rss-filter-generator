@@ -57,7 +57,7 @@ textarea { min-height:72px; resize:vertical; font-family:ui-monospace,Menlo,Cons
 .check input { accent-color:var(--accent); }
 .test-row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
 .test-row input { flex:1; min-width:200px; }
-.test-list { margin-top:12px; display:flex; flex-direction:column; gap:6px; max-height:360px; overflow:auto; }
+.test-list { margin-top:12px; display:flex; flex-direction:column; gap:6px; max-height:240px; overflow:auto; }
 .item { display:flex; justify-content:space-between; align-items:center; background:var(--item-bg); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px; gap:10px; transition:background 0.35s ease; }
 .item .title { font-family:ui-monospace,monospace; color:var(--hint-code-text); word-break:break-all; flex:1; }
 .tag { font-size:11px; font-weight:800; padding:3px 8px; border-radius:99px; white-space:nowrap; }
@@ -150,7 +150,7 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 <p class="hint">
 • <b>保留</b>：<code>Must contain</code> 必須命中 <code>[A-B GB]</code>，區間外與所有 <code>MB</code> 皆不下載；<code>TB</code> 視為區間外。<br>
 • <b>排除</b>：命中 <code>[A-B GB]</code> 即丟棄，區間外不受影響。<br>
-• 範例：<code>1-10 保留</code> 可同時排除 <code>[784 MB]</code> 這類過小包與 <code>[50 GB]</code> 巨包。
+• 範例：<code>1-10 保留</code> 可同時<code>[784 MB]</code> 這類過小包與 <code>[50 GB]</code> 巨包。
 </p>
 </div>
 </details>
@@ -163,7 +163,7 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 <textarea id="includeOrKw" placeholder="例如：&#10;HHWEB&#10;OTHER"></textarea>
 </div>
 <div>
-<span class="kw-head" style="color:#f87171">排除 OR <small>任一出現就排除</small></span>
+<span class="kw-head" style="color:#f87171">OR <small>任一出現就排除</small></span>
 <textarea id="excludeOrKw" placeholder="例如：&#10;4K&#10;HDR"></textarea>
 </div>
 <div>
@@ -171,7 +171,7 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 <textarea id="includeAndKw" placeholder="例如：&#10;HHWEB&#10;1080p"></textarea>
 </div>
 <div>
-<span class="kw-head" style="color:#f87171">排除 AND <small>全部同時出現才排除</small></span>
+<span class="kw-head" style="color:#f87171">AND <small>全部同時出現才排除</small></span>
 <textarea id="excludeAndKw" placeholder="例如：&#10;Sample&#10;1080p"></textarea>
 </div>
 </div>
@@ -403,13 +403,8 @@ function parseKw(raw, isRegex){
 }
 const presets=[
   'Call Me By Fire S06 2021 1080p WEB-DL H.264 AAC2.0-HHWEB[3.94 GB]',
-  'False Memory S01 2026 1080p WEB-DL H.264 AAC-HHWEB[433.01 MB]',
   'Shrouding the Heavens S01 2023 2160p TX WEB-DL H.265 AAC2.0-HHWEB[784.54 MB]',
-  'Demo HDR 4K WEB-DL[6 GB]',
   'Demo 1080p HHWEB[12 GB]',
-  'Demo Show S01[0.8 TB] 1080p',
-  'Demo Sample[2 GB] 1080p',
-  'Demo Sample 1080p[2 GB]',
 ];
 let customTitles=[];
 function build(){
@@ -420,6 +415,10 @@ function build(){
   const includeOr  = parseKw(document.getElementById('includeOrKw').value, isRegex);
   const excludeOr  = parseKw(document.getElementById('excludeOrKw').value, isRegex);
   const excludeAnd = parseKw(document.getElementById('excludeAndKw').value, isRegex);
+  // raw（未跳脫）用於顯示排除原因
+  function parseKwRaw(raw){ if(!raw.trim()) return []; return raw.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean); }
+  const excludeOrRaw  = parseKwRaw(document.getElementById('excludeOrKw').value);
+  const excludeAndRaw = parseKwRaw(document.getElementById('excludeAndKw').value);
   const intervalEnable = document.getElementById('intervalEnable').checked;
   let intervalAraw=document.getElementById('intervalA').value;
   let intervalBraw=document.getElementById('intervalB').value;
@@ -439,7 +438,7 @@ function build(){
   let sizeBlack='', sizeWhite='', intervalPat='';
   if(intervalEnable){
     intervalPat = buildIntervalGBPrecise(intervalAraw, intervalBraw);
-    // 區間保留/排除 對應的純正則展示
+    // 區間保留/對應的純正則展示
     if(intervalAct==='retain'){
       sizeWhite = intervalPat;
       sizeBlack = '(區間保留模式，無黑名單)';
@@ -525,23 +524,82 @@ function build(){
   const testContain = finalContain ? finalContain.replace(/\(\?i\)/g,'') : '';
   const testNot = finalNot ? finalNot.replace(/\(\?i\)/g,'') : '';
   const testFlags = caseSensitive ? '' : 'i';
-  renderTests(testContain, testNot, testFlags);
+  const testMeta = {
+    n, mode, intervalEnable, intervalAct,
+    intervalAraw, intervalBraw,
+    sizeBlack, sizeWhite, intervalPat,
+    excludeOr, excludeOrRaw,
+    excludeAnd, excludeAndRaw,
+    caseSensitive
+  };
+  renderTests(testContain, testNot, testFlags, testMeta);
 }
-function renderTests(containPat, notPat, flags){
+function renderTests(containPat, notPat, flags, meta){
   const list=document.getElementById('testList');
   list.innerHTML='';
   let reContain=null, reNot=null;
   try{ reContain = containPat ? new RegExp(containPat, flags) : null; }catch(e){ reContain=null; }
   try{ reNot = notPat ? new RegExp(notPat, flags) : null; }catch(e){ reNot=null; }
-  const all=[...presets, ...customTitles];
+  // 用於精確原因的個別正則（AND 需 lookahead）
+  const fl = flags || '';
+  function tryRe(pat){ try{ return new RegExp(pat, fl); }catch(e){ return null; } }
+  let reSizeBlack=null, reExcludeOr=null, reExcludeAnd=null;
+  if(meta){
+    const tbPat = meta.intervalEnable ? meta.intervalPat : (meta.mode==='black' ? meta.sizeBlack : '');
+    reSizeBlack = tbPat && tbPat[0]==='\\' ? tryRe(tbPat.replace(/\(\?i\)/g,'')) : null;
+    // OR：逐一嘗試，命中即報是哪個關鍵字
+    // AND：整組 lookahead
+    if(meta.excludeAnd && meta.excludeAnd.length){
+      const andPat='^'+meta.excludeAnd.map(k=>`(?=.*${k})`).join('')+'.*';
+      reExcludeAnd=tryRe(andPat);
+    }
+  }
+  const all=[...customTitles, ...presets];
   all.forEach(t=>{
     let passContain = reContain ? reContain.test(t) : true;
     let hitNot = reNot ? reNot.test(t) : false;
     let willDownload = passContain && !hitNot;
     let reason='';
-    if(!passContain) reason='未命中包含';
-    else if(hitNot) reason='命中排除/大小';
-    else reason='通過';
+    if(!passContain){
+      // 嘗試精確指出是哪個包含條件未命中
+      if(meta){
+        const incAndMiss = meta.includeAnd && meta.includeAnd.length ? meta.includeAnd.filter(k=> !tryRe(k).test(t)) : [];
+        //  簡化：只報第一個缺失
+        if(incAndMiss.length) reason='未命中包含 AND: '+incAndMiss.slice(0,2).join(', ');
+        else if(meta.includeOr && meta.includeOr.length){
+          const hit=meta.includeOr.some(k=> tryRe(k).test(t));
+          if(!hit) reason='未命中包含 OR: '+(meta.includeOr[0]||'');
+        } else {
+          reason='未命中包含';
+        }
+      } else reason='未命中包含';
+    } else if(hitNot){
+      // 精確排除原因：大小 / 排除OR(哪個詞) / 排除AND
+      let reasons=[];
+      if(reSizeBlack && reSizeBlack.test(t)){
+        if(meta.intervalEnable && meta.intervalAct==='exclude'){
+          const a=Math.min(parseFloat(meta.intervalAraw), parseFloat(meta.intervalBraw));
+          const b=Math.max(parseFloat(meta.intervalAraw), parseFloat(meta.intervalBraw));
+          reasons.push(`區間 ${a}-${b}GB`);
+        } else if(!meta.intervalEnable && meta.mode==='black'){
+          reasons.push(`大小≥${meta.n}GB`);
+          // 若同時是 TB，再標
+          if(/\[.*TB\]/i.test(t) || /\bTB\b/i.test(t)) reasons[reasons.length-1]='大小≥'+meta.n+'GB / TB';
+        } else reasons.push('大小');
+      }
+      // OR：逐字命中
+      if(meta && meta.excludeOr && meta.excludeOr.length){
+        for(let i=0;i<meta.excludeOr.length;i++){
+          const re=tryRe(meta.excludeOr[i]);
+          if(re && re.test(t)){ reasons.push(`OR: ${meta.excludeOrRaw[i]||meta.excludeOr[i]}`); break; }
+        }
+      }
+      // AND：整組命中
+      if(reExcludeAnd && reExcludeAnd.test(t)){
+        reasons.push(`AND: ${(meta.excludeAndRaw||[]).join(' + ')}`);
+      }
+      reason = reasons.length ? reasons.join(' · ') : '命中排除';
+    } else reason='通過';
     const div=document.createElement('div');
     div.className='item';
     div.innerHTML=`<span class="title">${esc(t)}</span><span class="tag-reason">${reason}</span><span class="tag ${willDownload?'tag-pass':'tag-block'}">${willDownload?'下載':'排除'}</span>`;
@@ -555,7 +613,7 @@ function renderTests(containPat, notPat, flags){
   }
 }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function addCustom(){ const el=document.getElementById('customTitle'); const v=el.value.trim(); if(!v) return; customTitles.unshift(v); el.value=''; build(); }
+function addCustom(){ const el=document.getElementById('customTitle'); const v=el.value.trim(); if(!v) return; customTitles.unshift(v); el.value=''; build(); requestAnimationFrame(()=>{ const list=document.getElementById('testList'); if(list) list.scrollTop=0; }); }
 function clearCustom(){ customTitles=[]; build(); }
 function copyText(id){
   const el=document.getElementById(id);
