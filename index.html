@@ -155,15 +155,16 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 </div>
 </details>
 
-<div class="card">
-<span class="label">2. 關鍵字 <small>四種模式同列，逗號或換行分隔</small></span>
+<details class="card" id="keywordCard" open>
+<summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--accent);list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap">▸ 2. 關鍵字 <small style="color:var(--muted);font-weight:400">— 四種模式同列，逗號或換行分隔</small> <span id="keywordSummary" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto"></span></summary>
+<div style="margin-top:14px">
 <div class="grid4">
 <div>
 <span class="kw-head" style="color:#60a5fa">包含 OR <small>任一出現就下載</small></span>
 <textarea id="includeOrKw" placeholder="例如：&#10;HHWEB&#10;OTHER"></textarea>
 </div>
 <div>
-<span class="kw-head" style="color:#f87171">OR <small>任一出現就排除</small></span>
+<span class="kw-head" style="color:#f87171">排除 OR <small>任一出現就排除</small></span>
 <textarea id="excludeOrKw" placeholder="例如：&#10;4K&#10;HDR"></textarea>
 </div>
 <div>
@@ -181,6 +182,7 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 </div>
 <p class="hint">預設字面比對自動跳脫 <code>. * + ? ^ $ [ ] ( ) { } | \</code>。四格可同時填寫，邏輯：<code>Must contain = (包含AND 全中) AND (包含OR 任一) AND (大小)</code>；<code>Must not contain = (大小) OR (排除OR 任一) OR (排除AND 全中)</code>。</p>
 </div>
+</details>
 
 <div class="card" style="padding-top:34px">
 <button class="copy" onclick="copyText('outContain')">複製</button>
@@ -533,6 +535,25 @@ function build(){
     caseSensitive
   };
   renderTests(testContain, testNot, testFlags, testMeta);
+  // 折疊時摘要：收合也能看到設定
+  try{
+    const kwSum=document.getElementById('keywordSummary');
+    if(kwSum){
+      const bits=[];
+      const orInc=(document.getElementById('includeOrKw').value.trim());
+      const orExc=(document.getElementById('excludeOrKw').value.trim());
+      const andInc=(document.getElementById('includeAndKw').value.trim());
+      const andExc=(document.getElementById('excludeAndKw').value.trim());
+      function brief(raw, max){ const parts=raw.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean); const shown=parts.slice(0,2).join(', '); return parts.length>2 ? shown+' +'+(parts.length-2) : shown; }
+      if(orInc) bits.push('包含OR: '+brief(orInc,2));
+      if(orExc) bits.push('排除OR: '+brief(orExc,2));
+      if(andInc) bits.push('包含AND: '+brief(andInc,2));
+      if(andExc) bits.push('排除AND: '+brief(andExc,2));
+      kwSum.textContent = bits.length ? bits.join(' · ') : '(未設定)';
+      const card=document.getElementById('keywordCard');
+      if(card && !card.open) kwSum.style.opacity='1'; else kwSum.style.opacity='0.85';
+    }
+  }catch(e){}
 }
 function renderTests(containPat, notPat, flags, meta){
   const list=document.getElementById('testList');
