@@ -68,7 +68,8 @@ textarea { min-height:72px; resize:vertical; font-family:ui-monospace,Menlo,Cons
 .kw-head { font-size:11px; font-weight:700; margin-bottom:6px; display:block; line-height:1.4; }
 .kw-head small { font-weight:400; color:var(--muted); display:block; font-size:10px; margin-top:2px; }
 .interval-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
-.interval-row input[type=number] { max-width:90px; font-size:16px; }
+.interval-row input[type=number] { max-width:118px; font-size:16px; }
+.interval-row input[type=number]::placeholder { font-size:12px; }
 .range-dash { color:var(--muted); font-weight:700; }
 .callout { border-radius:12px; padding:12px 14px; margin-top:10px; font-size:12px; line-height:1.7; }
 .callout-warn { background:rgba(251,146,60,0.16); border:1px solid rgba(251,146,60,0.55); border-left:4px solid #fb923c; color:#fed7aa; box-shadow:0 2px 12px rgba(251,146,60,0.15); }
@@ -126,9 +127,9 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 <div class="interval-row" id="intervalInputs">
 <div class="input-group" style="flex:0 0 auto; min-width:0">
 <span>保留/排除</span>
-<input id="intervalA" type="number" value="1" min="0" max="999" step="0.01">
+<input id="intervalA" type="number" value="1" min="0" max="999" step="0.01" placeholder="0 (留空)">
 <span class="range-dash">—</span>
-<input id="intervalB" type="number" value="10" min="0" max="999" step="0.01">
+<input id="intervalB" type="number" value="10" min="0" max="999" step="0.01" placeholder="∞ (留空)">
 <span>GB</span>
 </div>
 <div class="row" style="gap:8px">
@@ -148,9 +149,10 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 </div>
 </div>
 <p class="hint">
-• <b>保留</b>：<code>Must contain</code> 必須命中 <code>[A-B GB]</code>，區間外與所有 <code>MB</code> 皆不下載；<code>TB</code> 視為區間外。<br>
-• <b>排除</b>：命中 <code>[A-B GB]</code> 即丟棄，區間外不受影響。<br>
-• 範例：<code>1-10 保留</code> 可同時<code>[784 MB]</code> 這類過小包與 <code>[50 GB]</code> 巨包。
+• 留空：<code>A 留空=0</code>，<code>B 留空=不限制(∞)</code>。例：<code>[5 — 留空] 保留</code> = <code>≥5GB</code>（含 <code>TB</code>）；<code>[留空 — 10] 保留</code> = <code>≤10GB</code>（<code>MB</code> 算區間內）。<br>
+• <b>保留</b>：<code>Must contain</code> 必須命中區間；<code>MB</code> 僅在「含上限」區間視為命中。<br>
+• <b>排除</b>：命中區間即丟棄，區間外的 <code>MB</code> 不會被排除。<br>
+• 範例：<code>1-10 保留</code> 同時排除 <code>[50 GB]</code> 巨包，<code>[留空-10] 保留</code> 則連 <code>[784 MB]</code> 也一併保留。
 </p>
 </div>
 </details>
@@ -172,7 +174,7 @@ textarea, .test-list { scrollbar-width:thin; scrollbar-color:var(--border) trans
 <textarea id="includeAndKw" placeholder="例如：&#10;HHWEB&#10;1080p"></textarea>
 </div>
 <div>
-<span class="kw-head" style="color:#f87171">AND <small>全部同時出現才排除</small></span>
+<span class="kw-head" style="color:#f87171">排除 AND <small>全部同時出現才排除</small></span>
 <textarea id="excludeAndKw" placeholder="例如：&#10;Sample&#10;1080p"></textarea>
 </div>
 </div>
@@ -424,11 +426,13 @@ function build(){
   const intervalEnable = document.getElementById('intervalEnable').checked;
   let intervalAraw=document.getElementById('intervalA').value;
   let intervalBraw=document.getElementById('intervalB').value;
-  // 預設
-  if(!intervalAraw) intervalAraw="1";
-  if(!intervalBraw) intervalBraw="10";
+  // 留空語意：極小留空=0，極大留空=不限制(∞)
+  const intervalAempty = !intervalAraw.trim();
+  const intervalBempty = !intervalBraw.trim();
+  if(intervalAempty) intervalAraw="0";
+  // intervalBempty 保持為空標記，用於後續「不限制」分支
   const intervalA = parseFloat(intervalAraw)||0;
-  const intervalB = parseFloat(intervalBraw)||0;
+  const intervalB = intervalBempty ? Infinity : (parseFloat(intervalBraw)||0);
   const intervalAct = document.querySelector('input[name=intervalAct]:checked').value;
 
   // UI：區間啟用時淡化上方閾值
@@ -439,10 +443,29 @@ function build(){
 
   let sizeBlack='', sizeWhite='', intervalPat='';
   if(intervalEnable){
-    intervalPat = buildIntervalGBPrecise(intervalAraw, intervalBraw);
-    // 區間保留/對應的純正則展示
+    if(intervalAempty && intervalBempty){
+      // 兩邊皆空 = 不限制，視為無區間
+      intervalPat = '';
+    } else if(intervalBempty){
+      // 上限不限制：≥ A（含 TB）
+      { const _ge = buildGEGBPrecise(intervalAraw); intervalPat = `(?:`+_ge+`|\\[\\d+(?:\\.\\d+)?\\s*TB\\])`; }
+    } else if(intervalAempty){
+      // 下限 0，等價於 ≤ B（需含 MB：[0-B GB] 內，MB 視為 0.x GB）
+      // 為滿足「MB 算區間內」：≤B 時 MB 應通過，所以 intervalPat 同時需匹配 MB，透過保留邏輯中的 MB 處理
+      intervalPat = buildLEGBPrecise(intervalBraw);
+    } else {
+      intervalPat = buildIntervalGBPrecise(intervalAraw, intervalBraw);
+    }
+    // 區間保留/對應的純正則展示；若兩邊皆空則無限制
     if(intervalAct==='retain'){
-      sizeWhite = intervalPat;
+      if(!intervalPat) sizeWhite = '(未設區間，不過濾)';
+      else {
+        // MB 算區間內：僅在「含上限」的保留區間，MB 視為通過
+        // 判斷：若為「≤B」或「0-B」區間，MB 應算通過 -> intervalPat 需 OR 上 MB
+        const needMB = intervalBempty ? false : true; // 只要有上限 B，MB 就算區間內
+        if(needMB) intervalPat = `(?:${intervalPat}|\\[\\d+(?:\\.\\d+)?\\s*MB\\])`;
+        sizeWhite = intervalPat;
+      }
       sizeBlack = '(區間保留模式，無黑名單)';
     } else {
       sizeBlack = intervalPat;
